@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D-каталог оборудования | Ваша компания</title>
+  
+  <!-- ✅ Встроенные стили (style.css не нужен) -->
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; overflow: hidden; background: #000; }
+
+    /* Приветственный экран */
+    #intro { 
+      position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      z-index: 1000; display: flex; flex-direction: column; 
+      justify-content: center; align-items: center; 
+    }
+    #logo { 
+      max-width: 400px; max-height: 200px; 
+      filter: drop-shadow(0 10px 30px rgba(0,0,0,0.3));
+      animation: logoAnim 2s ease-out; 
+    }
+    #intro p { 
+      color: rgba(255,255,255,0.9); font-size: 1.4em; 
+      margin-top: 30px; font-weight: 300; 
+      animation: fadeIn 1s 1s both; 
+    }
+    @keyframes logoAnim { 
+      0% { opacity: 0; transform: scale(0.5) rotate(-10deg); } 
+      50% { transform: scale(1.05) rotate(2deg); }
+      100% { opacity: 1; transform: scale(1) rotate(0); }
+    }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* Viewer */
+    #viewer-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: none; }
+    #ui { 
+      position: absolute; top: 20px; right: 20px; z-index: 100; 
+      display: flex; gap: 10px; 
+    }
+    #ui button { 
+      background: rgba(255,255,255,0.95); border: none; 
+      padding: 12px 20px; border-radius: 25px; cursor: pointer; 
+      font-size: 14px; font-weight: 500; box-shadow: 0 4px 20px rgba(0,0,0,0.3); 
+      transition: all 0.3s ease; backdrop-filter: blur(10px);
+    }
+    #ui button:hover { background: white; transform: translateY(-3px) scale(1.05); box-shadow: 0 8px 30px rgba(0,0,0,0.4); }
+    #status { position: absolute; bottom: 20px; left: 20px; color: white; font-size: 14px; z-index: 100; }
+  </style>
+  
+  <!-- ✅ Современный Three.js -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.169.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.169.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <!-- Лого экран -->
+  <div id="intro">
+    <img src="logo.png" alt="Логотип компании" id="logo">
+    <p>3D-каталог оборудования</p>
+  </div>
+
+  <!-- Viewer -->
+  <div id="viewer-container">
+    <div id="ui">
+      <button id="fullscreen">📱 Полный экран</button>
+      <button id="reset">🔄 Сброс</button>
+    </div>
+    <div id="status">Готов к просмотру</div>
+  </div>
+
+  <!-- ✅ ВСЁ в одном файле! -->
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+    /** Элементы **/
+    const intro = document.getElementById('intro');
+    const viewerContainer = document.getElementById('viewer-container');
+    const fullscreenBtn = document.getElementById('fullscreen');
+    const resetBtn = document.getElementById('reset');
+    const status = document.getElementById('status');
+
+    /** Three.js **/
+    let scene, camera, renderer, controls, model;
+
+    initViewer();
+    showIntro();
+
+    function initViewer() {
+      status.textContent = 'Инициализация...';
+
+      // Сцена
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x0a0a1a);
+
+      // Камера
+      camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.01, 10000);
+      camera.position.set(0, 2, 5);
+
+      // Renderer
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.shadowMap.enabled = true;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.2;
+      viewerContainer.appendChild(renderer.domElement);
+
+      // Освещение
+      const ambient = new THREE.AmbientLight(0x404040, 0.4);
+      scene.add(ambient);
+      const dirLight = new THREE.DirectionalLight(0xffffff, 2);
+      dirLight.position.set(5, 10, 5);
+      scene.add(dirLight);
+
+      // Controls
+      controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.05;
+
+      // Загрузка модели
+      loadModel();
+
+      // Events
+      window.addEventListener('resize', resize);
+      fullscreenBtn.onclick = toggleFullscreen;
+      resetBtn.onclick = resetView;
+    }
+
+    function loadModel() {
+      const loader = new GLTFLoader();
+      status.textContent = 'Загрузка модели...';
+      
+      loader.load(
+        'model.glb',
+        (gltf) => {
+          console.log('✅ Модель загружена!');
+          status.textContent = 'Модель готова!';
+          model = gltf.scene;
+          
+          // ← ОСНОВНОЙ НАСТРОЙ: масштаб под вашу модель!
+          model.scale.set(1, 1, 1);  // Измените: 0.1 для больших, 5 для маленьких
+          model.position.set(0, 0, 0);
+          scene.add(model);
+        },
+        undefined,
+        (error) => {
+          console.log('ℹ️ model.glb не найден. Тестовый объект.');
+          status.textContent = 'Тестовый режим';
+          
+          // ТЕСТОВЫЙ ОБЪЕКТ (кубик)
+          const geometry = new THREE.BoxGeometry(2, 2, 2);
+          const material = new THREE.MeshStandardMaterial({ 
+            color: 0x00cc88, 
+            metalness: 0.2, 
+            roughness: 0.3 
+          });
+          model = new THREE.Mesh(geometry, material);
+          scene.add(model);
+        }
+      );
+    }
+
+    function showIntro() {
+      setTimeout(() => {
+        intro.style.opacity = '0';
+        intro.style.transform = 'scale(0.8)';
+        setTimeout(() => {
+          intro.style.display = 'none';
+          viewerContainer.style.display = 'block';
+          animate();
+        }, 800);
+      }, 3000);
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      if (model) {
+        model.rotation.y += 0.006;
+        model.rotation.x += 0.002;
+      }
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    function toggleFullscreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen?.();
+      } else {
+        document.exitFullscreen();
+      }
+    }
+
+    function resetView() {
+      controls.reset();
+    }
+
+    function resize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+  </script>
+</body>
+</html>
